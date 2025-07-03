@@ -17,6 +17,7 @@ from pathlib import Path
 from tqdm import tqdm
 from qcloud_cos import CosConfig, CosS3Client
 from qcloud_cos.cos_exception import CosServiceError
+from index_manager import IndexManager
 
 
 class EnhancedCOSDownloader:
@@ -37,6 +38,7 @@ class EnhancedCOSDownloader:
         self.config = self._load_config()
         self.client = self._init_client()
         self.logger = self._setup_logger()
+        self.index_manager = IndexManager()
         
     def _load_config(self):
         """加载配置文件"""
@@ -102,7 +104,7 @@ class EnhancedCOSDownloader:
         except Exception:
             return None
     
-    def _download_single_file(self, cos_key, local_path, file_size=None):
+    def _download_single_file(self, cos_key, local_path, file_size, etag):
         """
         下载单个文件
         
@@ -110,17 +112,23 @@ class EnhancedCOSDownloader:
             cos_key: COS对象键
             local_path: 本地文件路径
             file_size: 文件大小（用于进度显示）
+            etag: 文件的ETag
             
         Returns:
-            bool: 下载是否成功
+            str: 下载结果 ('success', 'skipped', 'failed')
         """
         cos_config = self.config['cos_config']
         
+        # 检查文件是否已在索引中
+        if self.index_manager.file_exists(cos_key, etag):
+            self.logger.info(f"文件已索引，跳过: {cos_key}")
+            return 'skipped'
+
         # 检查文件是否已存在且大小正确
         if os.path.exists(local_path):
             if file_size and os.path.getsize(local_path) == file_size:
                 self.logger.info(f"文件已存在，跳过: {cos_key}")
-                return True
+                return 'skipped'
         
         # 创建目录
         os.makedirs(os.path.dirname(local_path), exist_ok=True)
@@ -136,8 +144,19 @@ class EnhancedCOSDownloader:
                 with open(local_path, 'wb') as f:
                     f.write(response['Body'].read())
                 
+                # 下载成功后添加到索引
+                md5_hash = self._calculate_md5(local_path)
+                last_modified = datetime.fromtimestamp(os.path.getmtime(local_path)).isoformat()
+                self.index_manager.add_file(
+                    file_path=local_path,
+                    file_size=file_size,
+                    last_modified=last_modified,
+                    md5_hash=md5_hash,
+                    cos_key=cos_key,
+                    etag=etag
+                )
                 self.logger.info(f"下载成功: {cos_key}")
-                return True
+                return 'success'
                 
             except Exception as e:
                 self.logger.warning(f"下载失败 (尝试 {attempt + 1}/{self.retry_times}): {cos_key} - {e}")
@@ -145,7 +164,7 @@ class EnhancedCOSDownloader:
                     time.sleep(2 ** attempt)  # 指数退避
                 else:
                     self.logger.error(f"下载最终失败: {cos_key}")
-                    return False
+                    return 'failed'
     
     def list_objects(self, prefix=None, extensions=None, min_size=None, max_size=None):
         """
@@ -196,9 +215,9 @@ class EnhancedCOSDownloader:
                                 continue
                         
                         # 文件大小过滤
-                        if min_size and obj['Size'] < min_size:
+                        if min_size and int(obj['Size']) < min_size:
                             continue
-                        if max_size and obj['Size'] > max_size:
+                        if max_size and int(obj['Size']) > max_size:
                             continue
                         
                         filtered_objects.append(obj)
@@ -206,8 +225,8 @@ class EnhancedCOSDownloader:
                     all_objects.extend(filtered_objects)
                     self.logger.info(f"已获取 {len(all_objects)} 个对象...")
                     
-                    if response['IsTruncated']:
-                        marker = objects[-1]['Key']
+                    if response.get('IsTruncated') == 'true':
+                        marker = response['NextMarker']
                     else:
                         break
                 else:
@@ -252,8 +271,8 @@ class EnhancedCOSDownloader:
         for obj in objects:
             cos_key = obj['Key']
             local_path = os.path.join(output_dir, cos_key.replace('/', os.sep))
-            download_tasks.append((cos_key, local_path, obj['Size']))
-        
+            download_tasks.append((cos_key, local_path, int(obj['Size']), obj['ETag'].strip('"')))
+
         # 统计信息
         success_count = 0
         failed_count = 0
@@ -276,10 +295,12 @@ class EnhancedCOSDownloader:
                         task = future_to_task[future]
                         try:
                             result = future.result()
-                            if result:
+                            if result == 'success':
                                 success_count += 1
-                            else:
+                            elif result == 'failed':
                                 failed_count += 1
+                            elif result == 'skipped':
+                                skipped_count += 1
                         except Exception as e:
                             self.logger.error(f"任务执行异常: {task[0]} - {e}")
                             failed_count += 1
@@ -302,10 +323,12 @@ class EnhancedCOSDownloader:
                     task = future_to_task[future]
                     try:
                         result = future.result()
-                        if result:
+                        if result == 'success':
                             success_count += 1
-                        else:
+                        elif result == 'failed':
                             failed_count += 1
+                        elif result == 'skipped':
+                            skipped_count += 1
                     except Exception as e:
                         self.logger.error(f"任务执行异常: {task[0]} - {e}")
                         failed_count += 1
@@ -321,8 +344,10 @@ class EnhancedCOSDownloader:
     
     def _generate_download_report(self, success_count, failed_count, skipped_count, output_dir):
         """生成下载报告"""
+        log_dir = 'logs'
+        os.makedirs(log_dir, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        report_file = f"download_report_{timestamp}.json"
+        report_file = os.path.join(log_dir, f"download_report_{timestamp}.json")
         
         report = {
             'timestamp': datetime.now().isoformat(),
@@ -343,6 +368,12 @@ class EnhancedCOSDownloader:
             json.dump(report, f, ensure_ascii=False, indent=2)
         
         self.logger.info(f"下载报告已保存到: {report_file}")
+
+    def close(self):
+        """关闭资源"""
+        if self.index_manager:
+            self.index_manager.close()
+        self.logger.info("资源已释放")
 
 
 def main():
@@ -407,9 +438,12 @@ def main():
     except Exception as e:
         print(f"发生错误: {e}")
         return 1
-    
+    finally:
+        downloader.close()
+
     return 0
 
 
 if __name__ == "__main__":
-    exit(main()) 
+    exit(main())
+ 
