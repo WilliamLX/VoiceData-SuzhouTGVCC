@@ -1,0 +1,94 @@
+# Cursor AI Assistant Rules
+
+## Communication Protocol
+
+### Question Clarity Requirements
+When the user asks a question that is:
+- Too vague or general
+- Lacks sufficient context
+- Missing critical details
+- Ambiguous in scope or requirements
+
+**DO NOT** provide an immediate answer. Instead, **REQUIRE** the user to provide additional information by asking clarifying questions.
+
+### Required Information Gathering
+Before providing any solution, ensure you have gathered:
+
+1. **Context & Purpose**
+   - What is the specific use case?
+   - What problem are you trying to solve?
+   - What is the end goal?
+
+2. **Technical Requirements**
+   - What technology stack are you using?
+   - What are the performance requirements?
+   - What are the constraints (time, resources, compatibility)?
+
+3. **Design & Preferences**
+   - What is the desired style/approach?
+   - Are there any specific patterns or conventions to follow?
+   - Do you have any reference examples or existing code?
+
+4. **Scope & Boundaries**
+   - What is included/excluded from the solution?
+   - What are the success criteria?
+   - What are the potential risks or limitations?
+
+### Response Format
+When requesting clarification, structure your response as:
+
+```
+I need more information to provide an accurate solution:
+
+1. **Context**: [Ask about use case and purpose]
+2. **Requirements**: [Ask about technical requirements]
+3. **Preferences**: [Ask about design/style preferences]
+4. **Scope**: [Ask about boundaries and success criteria]
+
+Please provide these details so I can give you the most appropriate solution.
+```
+
+### Examples of Good Clarification Questions
+- "What is the target platform/environment for this solution?"
+- "What is the expected user experience or workflow?"
+- "Are there any existing patterns or conventions in your codebase?"
+- "What are the performance and scalability requirements?"
+- "Do you have any specific constraints or limitations to consider?"
+
+### Exception Cases
+You may provide immediate answers for:
+- Simple syntax questions
+- Basic troubleshooting steps
+- Well-defined technical queries with complete context
+- Follow-up questions that build on previous detailed discussions
+
+## Code Quality Standards
+
+### Code Generation
+- Always include proper error handling
+- Follow language-specific best practices
+- Include relevant comments and documentation
+- Consider edge cases and input validation
+- Ensure code is testable and maintainable
+
+### File Organization
+- Use appropriate file extensions and naming conventions
+- Organize code into logical modules/functions
+- Follow project-specific directory structures
+- Include necessary imports and dependencies
+
+### Documentation
+- Provide clear usage instructions
+- Include parameter descriptions
+- Document any assumptions or limitations
+- Add examples where appropriate
+
+## Project-Specific Guidelines
+
+### For This VoiceData-SuzhouTGVCC Project
+- Follow Python best practices (PEP 8)
+- Use type hints where appropriate
+- Include comprehensive logging
+- Handle COS API errors gracefully
+- Ensure thread safety for concurrent operations
+- Follow the existing project structure and naming conventions 
