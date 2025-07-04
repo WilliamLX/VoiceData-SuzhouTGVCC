@@ -1,0 +1,31 @@
+[tool.ruff]
+# 目标Python版本
+target-version = "py39"
+# 行长度
+line-length = 88
+
+[tool.ruff.lint]
+# 启用所有规则
+select = ["ALL"]
+# 忽略一些规则
+ignore = [
+    "E501",  # 行长度限制
+    "E731",  # 不要将lambda赋值给变量
+    "F401",  # 未使用的导入
+    "F541",  # f-string没有占位符
+    "D203",  # 类前空行
+    "D212",  # 多行摘要第一行
+    "COM812",  # 与格式化器冲突的规则
+]
+
+[tool.ruff.format]
+# 使用双引号
+quote-style = "double"
+# 缩进使用4个空格
+indent-style = "space"
+# 行结束符
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+# 导入排序配置
+known-first-party = ["index_manager", "sync_detector"] 

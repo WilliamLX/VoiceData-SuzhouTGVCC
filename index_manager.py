@@ -1,127 +1,164 @@
-import sqlite3
-import os
+"""Index manager for tracking downloaded files."""
+
 import hashlib
-from datetime import datetime
+import sqlite3
+import threading
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
 
 class IndexManager:
     """Manages a local index of downloaded files using SQLite."""
 
-    def __init__(self, db_path='download_index.db'):
+    def __init__(self, db_path: str = "download_index.db") -> None:
         """
-        Initializes the IndexManager.
+        Initialize the IndexManager.
 
         Args:
-            db_path (str): The path to the SQLite database file.
+            db_path: The path to the SQLite database file.
         """
         self.db_path = db_path
-        self.conn = sqlite3.connect(self.db_path)
-        self.conn.row_factory = sqlite3.Row
+        self._local = threading.local()
         self._create_table()
 
-    def _create_table(self):
-        """Creates the 'local_files' table if it doesn't exist."""
-        with self.conn:
-            self.conn.execute("""
+    def _get_connection(self) -> sqlite3.Connection:
+        """Get database connection for current thread."""
+        if not hasattr(self._local, "conn"):
+            self._local.conn = sqlite3.connect(self.db_path)
+            self._local.conn.row_factory = sqlite3.Row
+        return self._local.conn
+
+    def _create_table(self) -> None:
+        """Create the 'local_files' table if it doesn't exist."""
+        conn = self._get_connection()
+        with conn:
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS local_files (
-                    id INTEGER PRIMARY KEY,
-                    file_path TEXT UNIQUE NOT NULL,
-                    file_size INTEGER NOT NULL,
-                    last_modified TEXT NOT NULL,
-                    md5_hash TEXT NOT NULL,
-                    download_time TEXT NOT NULL,
-                    cos_key TEXT NOT NULL,
+                    file_path TEXT PRIMARY KEY,
+                    file_size INTEGER,
+                    last_modified TEXT,
+                    md5_hash TEXT,
+                    download_time TEXT,
+                    cos_key TEXT,
                     etag TEXT
                 )
             """)
 
-    def add_file(self, file_path, file_size, last_modified, md5_hash, cos_key, etag):
+    def add_file(
+        self,
+        file_path: str,
+        file_size: int,
+        last_modified: str,
+        md5_hash: str,
+        cos_key: str,
+        etag: str,
+    ) -> None:
         """
-        Adds a file record to the index.
+        Add a file record to the index.
 
         Args:
-            file_path (str): Absolute path of the downloaded file.
-            file_size (int): Size of the file in bytes.
-            last_modified (str): Last modified timestamp (ISO 8601 format).
-            md5_hash (str): MD5 hash of the file.
-            cos_key (str): The object key in COS.
-            etag (str): The ETag of the object from COS.
+            file_path: Absolute path of the downloaded file.
+            file_size: Size of the file in bytes.
+            last_modified: Last modified timestamp (ISO 8601 format).
+            md5_hash: MD5 hash of the file.
+            cos_key: The object key in COS.
+            etag: The ETag of the object from COS.
         """
-        download_time = datetime.now().isoformat()
-        with self.conn:
-            self.conn.execute("""
-                INSERT OR REPLACE INTO local_files 
+        download_time = datetime.now(timezone.utc).isoformat()
+        conn = self._get_connection()
+        with conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO local_files
                 (file_path, file_size, last_modified, md5_hash, download_time, cos_key, etag)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (file_path, file_size, last_modified, md5_hash, download_time, cos_key, etag))
+            """,
+                (
+                    file_path,
+                    file_size,
+                    last_modified,
+                    md5_hash,
+                    download_time,
+                    cos_key,
+                    etag,
+                ),
+            )
 
-    def get_file(self, file_path):
+    def get_file(self, file_path: str) -> Optional[sqlite3.Row]:
         """
-        Retrieves a file record by its path.
+        Retrieve a file record by its path.
 
         Args:
-            file_path (str): The path of the file to retrieve.
+            file_path: The path of the file to retrieve.
 
         Returns:
             A dict-like row object if the file is found, otherwise None.
         """
-        cursor = self.conn.cursor()
+        conn = self._get_connection()
+        cursor = conn.cursor()
         cursor.execute("SELECT * FROM local_files WHERE file_path = ?", (file_path,))
         return cursor.fetchone()
 
-    def get_all_files(self):
+    def get_all_files(self) -> List[sqlite3.Row]:
         """
-        Retrieves all file records from the index.
+        Retrieve all file records from the index.
 
         Returns:
             A list of dict-like row objects.
         """
-        cursor = self.conn.cursor()
+        conn = self._get_connection()
+        cursor = conn.cursor()
         cursor.execute("SELECT * FROM local_files")
         return cursor.fetchall()
 
-    def remove_file(self, file_path):
+    def remove_file(self, file_path: str) -> None:
         """
-        Removes a file record from the index.
+        Remove a file record from the index.
 
         Args:
-            file_path (str): The path of the file to remove.
+            file_path: The path of the file to remove.
         """
-        with self.conn:
-            self.conn.execute("DELETE FROM local_files WHERE file_path = ?", (file_path,))
+        conn = self._get_connection()
+        with conn:
+            conn.execute("DELETE FROM local_files WHERE file_path = ?", (file_path,))
 
-    def file_exists(self, cos_key, etag):
+    def file_exists(self, cos_key: str, etag: str) -> bool:
         """
-        Checks if a file with a given COS key and ETag already exists.
+        Check if a file with a given COS key and ETag already exists.
 
         Args:
-            cos_key (str): The object key in COS.
-            etag (str): The ETag of the object from COS.
+            cos_key: The object key in COS.
+            etag: The ETag of the object from COS.
 
         Returns:
-            bool: True if the file exists, False otherwise.
+            True if the file exists, False otherwise.
         """
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT 1 FROM local_files WHERE cos_key = ? AND etag = ?", (cos_key, etag))
+        conn = self._get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT 1 FROM local_files WHERE cos_key = ? AND etag = ?", (cos_key, etag)
+        )
         return cursor.fetchone() is not None
 
-    def close(self):
-        """Closes the database connection."""
-        if self.conn:
-            self.conn.close()
+    def close(self) -> None:
+        """Close the database connection."""
+        if hasattr(self._local, "conn"):
+            self._local.conn.close()
 
     @staticmethod
-    def calculate_md5(file_path):
+    def calculate_md5(file_path: str) -> str:
         """
-        Calculates the MD5 hash of a file.
+        Calculate the MD5 hash of a file.
 
         Args:
-            file_path (str): The path to the file.
+            file_path: The path to the file.
 
         Returns:
-            str: The hex digest of the MD5 hash.
+            The hex digest of the MD5 hash.
         """
         hash_md5 = hashlib.md5()
-        with open(file_path, "rb") as f:
+        with Path(file_path).open("rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 hash_md5.update(chunk)
         return hash_md5.hexdigest()
