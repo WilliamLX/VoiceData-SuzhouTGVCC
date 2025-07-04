@@ -5,7 +5,6 @@ __pycache__/
 *.pyd
 
 # Database
-*.db
 *.sqlite3
 
 # Logs
@@ -20,3 +19,6 @@ downloads/
 
 # Config
 config.json
+
+# Others
+.DS_Store
