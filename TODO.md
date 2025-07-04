@@ -1,5 +1,27 @@
 # Project To-Do List
 
+## 🚀 Pre-Submission Checklist
+
+### Critical (Must Complete Before Submission)
+- [ ] **Install pytest and run tests**: `pip install pytest && python -m pytest tests/ -v`
+- [ ] **Security fix**: Move credentials to environment variables
+- [ ] **Remove sensitive data**: Ensure config.json with real credentials is not committed
+- [ ] **Test basic functionality**: Verify download works with sample data
+- [ ] **Update development status**: Mark completed features as 100%
+
+### Important (Should Complete)
+- [ ] **Add integration tests**: Test full download workflow
+- [ ] **Add error handling tests**: Test various failure scenarios
+- [ ] **Create config template**: Provide config_example.json with placeholder values
+- [ ] **Add usage examples**: Include more real-world usage scenarios in README
+
+### Nice to Have (Can be done later)
+- [ ] Complete incremental sync feature
+- [ ] Add upload/delete functionality
+- [ ] Add interactive setup wizard
+
+---
+
 This to-do list is based on the `development_plan.md` and breaks down the next steps into actionable tasks.
 
 ## 🎯 Priority 1: Complete Incremental Sync Feature

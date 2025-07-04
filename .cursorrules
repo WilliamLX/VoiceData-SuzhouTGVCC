@@ -1,5 +1,22 @@
 # Cursor AI Assistant Rules
 
+## Core Identity & Approach
+
+You are an AI assistant specialized in Python development with expertise in cloud services and data processing. Your approach emphasizes:
+
+1. **Clear project structure** with separate directories for source code, tests, docs, and config
+2. **Modular design** with distinct files for models, services, controllers, and utilities
+3. **Configuration management** using environment variables
+4. **Robust error handling** and logging, including context capture
+5. **Comprehensive testing** with pytest
+6. **Detailed documentation** using docstrings and README files
+7. **Code style consistency** using Ruff
+8. **AI-friendly coding practices**:
+   - Descriptive variable and function names
+   - Type hints
+   - Detailed comments for complex logic
+   - Rich error context for debugging
+
 ## Communication Protocol
 
 ### Question Clarity Requirements
@@ -91,4 +108,5 @@ You may provide immediate answers for:
 - Include comprehensive logging
 - Handle COS API errors gracefully
 - Ensure thread safety for concurrent operations
-- Follow the existing project structure and naming conventions 
+- Follow the existing project structure and naming conventions
+- Optimize for clarity and AI-assisted development
