@@ -51,7 +51,7 @@ cp config_example.json config.json
   "options": {
     "prefix": "Record/",
     "output_file": "cos_objects.json",
-    "download_dir": "downloads",
+    "download_dir": "/Users/server1/Library/Mobile Documents/com~apple~CloudDocs/Data",
     "max_keys_per_request": 1000
   }
 }
