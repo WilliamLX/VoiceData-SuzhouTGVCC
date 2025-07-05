@@ -1,11 +1,12 @@
 """Index manager for tracking downloaded files."""
 
+from __future__ import annotations
+
 import hashlib
 import sqlite3
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 
 class IndexManager:
@@ -17,6 +18,7 @@ class IndexManager:
 
         Args:
             db_path: The path to the SQLite database file.
+
         """
         self.db_path = db_path
         self._local = threading.local()
@@ -33,7 +35,8 @@ class IndexManager:
         """Create the 'local_files' table if it doesn't exist."""
         conn = self._get_connection()
         with conn:
-            conn.execute("""
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS local_files (
                     file_path TEXT PRIMARY KEY,
                     file_size INTEGER,
@@ -43,27 +46,16 @@ class IndexManager:
                     cos_key TEXT,
                     etag TEXT
                 )
-            """)
+            """
+            )
 
-    def add_file(
-        self,
-        file_path: str,
-        file_size: int,
-        last_modified: str,
-        md5_hash: str,
-        cos_key: str,
-        etag: str,
-    ) -> None:
+    def add_file(self, file_data: dict) -> None:
         """
         Add a file record to the index.
 
         Args:
-            file_path: Absolute path of the downloaded file.
-            file_size: Size of the file in bytes.
-            last_modified: Last modified timestamp (ISO 8601 format).
-            md5_hash: MD5 hash of the file.
-            cos_key: The object key in COS.
-            etag: The ETag of the object from COS.
+            file_data: A dictionary containing file information.
+
         """
         download_time = datetime.now(timezone.utc).isoformat()
         conn = self._get_connection()
@@ -72,20 +64,12 @@ class IndexManager:
                 """
                 INSERT OR REPLACE INTO local_files
                 (file_path, file_size, last_modified, md5_hash, download_time, cos_key, etag)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (:file_path, :file_size, :last_modified, :md5_hash, :download_time, :cos_key, :etag)
             """,
-                (
-                    file_path,
-                    file_size,
-                    last_modified,
-                    md5_hash,
-                    download_time,
-                    cos_key,
-                    etag,
-                ),
+                {**file_data, "download_time": download_time},
             )
 
-    def get_file(self, file_path: str) -> Optional[sqlite3.Row]:
+    def get_file(self, file_path: str) -> sqlite3.Row | None:
         """
         Retrieve a file record by its path.
 
@@ -94,18 +78,20 @@ class IndexManager:
 
         Returns:
             A dict-like row object if the file is found, otherwise None.
+
         """
         conn = self._get_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM local_files WHERE file_path = ?", (file_path,))
         return cursor.fetchone()
 
-    def get_all_files(self) -> List[sqlite3.Row]:
+    def get_all_files(self) -> list[sqlite3.Row]:
         """
         Retrieve all file records from the index.
 
         Returns:
             A list of dict-like row objects.
+
         """
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -118,6 +104,7 @@ class IndexManager:
 
         Args:
             file_path: The path of the file to remove.
+
         """
         conn = self._get_connection()
         with conn:
@@ -133,6 +120,7 @@ class IndexManager:
 
         Returns:
             True if the file exists, False otherwise.
+
         """
         conn = self._get_connection()
         cursor = conn.cursor()
@@ -156,8 +144,9 @@ class IndexManager:
 
         Returns:
             The hex digest of the MD5 hash.
+
         """
-        hash_md5 = hashlib.md5()
+        hash_md5 = hashlib.new("md5")
         with Path(file_path).open("rb") as f:
             for chunk in iter(lambda: f.read(4096), b""):
                 hash_md5.update(chunk)

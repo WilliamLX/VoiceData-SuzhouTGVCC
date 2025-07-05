@@ -77,3 +77,14 @@ This to-do list is based on the `development_plan.md` and breaks down the next s
 - [ ] Implement an interactive setup for `config.json` on the first run.
 - [ ] Allow for multiple `--prefix` arguments for more flexible filtering.
 - [ ] Add an `--exclude` argument to ignore certain files or directories.
+
+## 🔊 Priority 5: Process Audio Files
+
+- [ ] Implement audio transcription to convert speech to text.
+- [ ] Add support for various audio formats.
+- [ ] Integrate a third-party speech recognition service.
+- [x] Implement audio format conversion.
+- [ ] Extract metadata from audio files (e.g., duration, sample rate).
+- [ ] Write unit tests for all new audio processing functions.
+- [ ] Update documentation to reflect the new audio processing capabilities.
+

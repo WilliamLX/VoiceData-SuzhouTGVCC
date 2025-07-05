@@ -1,64 +1,66 @@
 #!/usr/bin/env python3
-"""
-腾讯云COS对象获取工具
-用于获取指定存储桶中的所有对象
-"""
+"""A tool for fetching objects from Tencent Cloud COS."""
 
 import json
-import os
+import logging
 import sys
 import time
+from pathlib import Path
+from typing import Any
 
 from qcloud_cos import CosConfig, CosS3Client
 from qcloud_cos.cos_exception import CosServiceError
 
 
 class COSObjectDownloader:
-    def __init__(self, secret_id, secret_key, region, bucket_name):
+    """A tool for downloading objects from COS."""
+
+    def __init__(
+        self, secret_id: str, secret_key: str, region: str, bucket_name: str
+    ) -> None:
         """
-        初始化COS客户端
+        Initialize the COS client.
 
         Args:
-            secret_id (str): 腾讯云SecretId
-            secret_key (str): 腾讯云SecretKey
-            region (str): COS地域，如ap-beijing-1
-            bucket_name (str): 存储桶名称
-
+            secret_id: The Tencent Cloud SecretId.
+            secret_key: The Tencent Cloud SecretKey.
+            region: The COS region, e.g., ap-beijing-1.
+            bucket_name: The name of the bucket.
         """
         self.secret_id = secret_id
         self.secret_key = secret_key
         self.region = region
         self.bucket_name = bucket_name
 
-        # 配置COS客户端
         config = CosConfig(
             Region=self.region, SecretId=self.secret_id, SecretKey=self.secret_key
         )
         self.client = CosS3Client(config)
+        self.logger = logging.getLogger("COSObjectDownloader")
 
-    def list_all_objects(self, prefix="", max_keys=1000):
+    def list_all_objects(
+        self, prefix: str = "", max_keys: int = 1000
+    ) -> list[dict[str, Any]]:
         """
-        获取存储桶中的所有对象
+        Get all objects in the bucket.
 
         Args:
-            prefix (str): 对象前缀，用于筛选特定目录下的对象
-            max_keys (int): 每次请求返回的最大对象数量
+            prefix: The object prefix to filter by.
+            max_keys: The maximum number of objects to return per request.
 
         Returns:
-            list: 所有对象的列表
-
+            A list of all objects.
         """
         all_objects = []
         marker = ""
 
-        print(f"正在获取存储桶 '{self.bucket_name}' 中的对象...")
-        print(f"前缀筛选: {prefix if prefix else '所有对象'}")
+        self.logger.info("Fetching objects from bucket '%s'...", self.bucket_name)
+        self.logger.info("Prefix filter: %s", prefix if prefix else "All objects")
 
         start_time = time.time()
 
         while True:
             try:
-                # 获取对象列表
                 response = self.client.list_objects(
                     Bucket=self.bucket_name,
                     Prefix=prefix,
@@ -66,45 +68,45 @@ class COSObjectDownloader:
                     MaxKeys=max_keys,
                 )
 
-                # 检查是否有内容
                 if "Contents" in response:
                     objects = response["Contents"]
                     all_objects.extend(objects)
-                    print(f"已获取 {len(all_objects)} 个对象...")
+                    self.logger.info("Fetched %d objects...", len(all_objects))
 
-                    # 检查是否还有更多对象
-                    if response["IsTruncated"]:
-                        marker = objects[-1]["Key"]
+                    if response.get("IsTruncated") == "true":
+                        marker = response["NextMarker"]
                     else:
                         break
                 else:
-                    print("存储桶为空或没有匹配的对象")
+                    self.logger.info("Bucket is empty or no matching objects found.")
                     break
 
-            except CosServiceError as e:
-                print(f"获取对象列表时发生错误: {e}")
+            except CosServiceError:
+                self.logger.exception("Error listing objects")
                 break
-            except (OSError, IOError, ValueError) as e:
-                print(f"发生未知错误: {e}")
+            except (OSError, ValueError):
+                self.logger.exception("An unknown error occurred")
                 break
 
         elapsed_time = time.time() - start_time
-        print(f"总共获取到 {len(all_objects)} 个对象，耗时 {elapsed_time:.2f} 秒")
+        self.logger.info(
+            "Total objects fetched: %d, time taken: %.2f seconds",
+            len(all_objects),
+            elapsed_time,
+        )
         return all_objects
 
-    def get_object_info(self, objects):
+    def get_object_info(self, objects: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """
-        获取对象的详细信息
+        Get detailed information for objects.
 
         Args:
-            objects (list): 对象列表
+            objects: A list of objects.
 
         Returns:
-            list: 包含对象详细信息的列表
-
+            A list of detailed object information.
         """
         object_info_list = []
-
         start_time = time.time()
 
         for obj in objects:
@@ -123,93 +125,115 @@ class COSObjectDownloader:
             object_info_list.append(info)
 
         elapsed_time = time.time() - start_time
-        print(f"获取对象详细信息耗时 {elapsed_time:.2f} 秒")
+        self.logger.info("Time taken to get object info: %.2f seconds", elapsed_time)
         return object_info_list
 
-    def save_objects_to_file(self, objects, filename="cos_objects.json"):
+    def save_objects_to_file(
+        self, objects: list[dict[str, Any]], filename: str = "cos_objects.json"
+    ) -> None:
         """
-        将对象信息保存到JSON文件
+        Save object information to a JSON file.
 
         Args:
-            objects (list): 对象列表
-            filename (str): 输出文件名
-
+            objects: A list of objects.
+            filename: The output filename.
         """
         start_time = time.time()
-
         object_info = self.get_object_info(objects)
+        output_path = Path(filename)
 
-        with open(filename, "w", encoding="utf-8") as f:
+        with output_path.open("w", encoding="utf-8") as f:
             json.dump(object_info, f, ensure_ascii=False, indent=2)
 
         elapsed_time = time.time() - start_time
-        print(f"对象信息已保存到 {filename}，耗时 {elapsed_time:.2f} 秒")
+        self.logger.info(
+            "Object information saved to %s, time taken: %.2f seconds",
+            output_path,
+            elapsed_time,
+        )
 
-    def download_objects(self, objects, local_dir="downloads", prefix_filter=""):
+    def download_objects(
+        self,
+        objects: list[dict[str, Any]],
+        local_dir: str = "downloads",
+        prefix_filter: str = "",
+    ) -> None:
         """
-        下载对象到本地目录
+        Download objects to a local directory.
 
         Args:
-            objects (list): 要下载的对象列表
-            local_dir (str): 本地下载目录
-            prefix_filter (str): 前缀过滤器
-
+            objects: The list of objects to download.
+            local_dir: The local download directory.
+            prefix_filter: A prefix to filter by.
         """
-        if not os.path.exists(local_dir):
-            os.makedirs(local_dir)
+        local_path = Path(local_dir)
+        local_path.mkdir(exist_ok=True)
 
         downloaded_count = 0
         total_count = len(objects)
 
-        print(f"开始下载 {total_count} 个对象到 {local_dir}...")
-
+        self.logger.info(
+            "Starting download of %d objects to %s...", total_count, local_path
+        )
         start_time = time.time()
 
         for obj in objects:
             key = obj["Key"]
-
-            # 如果设置了前缀过滤器，跳过不匹配的对象
             if prefix_filter and not key.startswith(prefix_filter):
                 continue
 
             try:
-                # 创建本地文件路径
-                local_path = os.path.join(local_dir, key)
-                local_dir_path = os.path.dirname(local_path)
+                dest_path = local_path / key
+                dest_path.parent.mkdir(parents=True, exist_ok=True)
 
-                # 创建目录
-                if local_dir_path and not os.path.exists(local_dir_path):
-                    os.makedirs(local_dir_path)
-
-                # 下载对象
                 response = self.client.get_object(Bucket=self.bucket_name, Key=key)
-
-                with open(local_path, "wb") as f:
+                with dest_path.open("wb") as f:
                     f.write(response["Body"].read())
 
                 downloaded_count += 1
-                print(f"已下载 ({downloaded_count}/{total_count}): {key}")
+                self.logger.info(
+                    "Downloaded (%d/%d): %s", downloaded_count, total_count, key
+                )
 
-            except (OSError, IOError, ValueError) as e:
-                print(f"下载 {key} 时发生错误: {e}")
+            except (OSError, ValueError):
+                self.logger.exception("Error downloading %s", key)
 
         elapsed_time = time.time() - start_time
-        print(
-            f"下载完成！成功下载 {downloaded_count} 个对象，总耗时 {elapsed_time:.2f} 秒"
+        self.logger.info(
+            "Download complete! Successfully downloaded %d objects, total time: %.2f seconds",
+            downloaded_count,
+            elapsed_time,
         )
 
 
-def main():
-    """主函数"""
-    print("腾讯云COS对象获取工具")
-    print("=" * 50)
+def get_user_input(prompt: str, default: str | None = None) -> str:
+    """
+    Get user input with a prompt and a default value.
+
+    Args:
+        prompt: The prompt to display to the user.
+        default: The default value to use if the user enters nothing.
+
+    Returns:
+        The user's input or the default value.
+    """
+    response = input(prompt).strip()
+    if not response and default is not None:
+        return default
+    return response
+
+
+def main() -> None:
+    """Run the main program."""
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger("Main")
+    logger.info("Tencent Cloud COS Object Fetcher")
+    logger.info("=" * 50)
 
     start_time = time.time()
 
-    # 获取用户输入
-    # 从配置文件读取COS配置
     try:
-        with open("config.json") as f:
+        with Path("config.json").open(encoding="utf-8") as f:
             config = json.load(f)
             cos_config = config["cos_config"]
             secret_id = cos_config["secret_id"]
@@ -217,67 +241,58 @@ def main():
             region = cos_config["region"]
             bucket_name = cos_config["bucket_name"]
     except FileNotFoundError:
-        print("错误: 未找到config.json配置文件")
+        logger.exception("Error: config.json not found.")
         sys.exit(1)
-    except KeyError as e:
-        print(f"错误: 配置文件缺少必要的字段: {e}")
+    except KeyError:
+        logger.exception("Error: Missing required field in config file.")
         sys.exit(1)
     except json.JSONDecodeError:
-        print("错误: config.json格式不正确")
+        logger.exception("Error: config.json is not well-formed.")
         sys.exit(1)
 
-    # 验证输入
     if not all([secret_id, secret_key, region, bucket_name]):
-        print("错误：所有字段都是必填的！")
+        logger.error("Error: All fields in the config are required.")
         sys.exit(1)
 
     try:
-        # 创建下载器实例
         downloader = COSObjectDownloader(secret_id, secret_key, region, bucket_name)
-
-        # 询问是否要筛选特定前缀
-        prefix = (
-            config["options"]["prefix"]
-            if "options" in config and "prefix" in config["options"]
-            else ""
-        )
-
-        # 获取所有对象
+        prefix = config.get("options", {}).get("prefix", "")
         objects = downloader.list_all_objects(prefix=prefix)
 
         if not objects:
-            print("没有找到任何对象")
+            logger.info("No objects found.")
             return
 
-        # 显示对象统计信息
         total_size = sum(
             int(obj["Size"]) for obj in objects if isinstance(obj["Size"], (int, str))
         )
-        print(f"\n对象统计:")
-        print(f"总数量: {len(objects)}")
-        print(f"总大小: {total_size / (1024 * 1024):.2f} MB")
+        logger.info("\nObject Statistics:")
+        logger.info("  Total count: %d", len(objects))
+        logger.info("  Total size: %.2f MB", total_size / (1024 * 1024))
 
-        # 询问是否保存对象信息到文件
-        save_to_file = input("\n是否保存对象信息到JSON文件? (y/n): ").strip().lower()
-        if save_to_file == "y":
-            filename = input("请输入文件名 (默认: cos_objects.json): ").strip()
-            if not filename:
-                filename = "cos_objects.json"
+        if (
+            get_user_input("\nSave object info to JSON file? (y/n): ", "n").lower()
+            == "y"
+        ):
+            filename = get_user_input(
+                "Enter filename (default: cos_objects.json): ", "cos_objects.json"
+            )
             downloader.save_objects_to_file(objects, filename)
 
-        # 询问是否下载对象
-        download_objects = input("\n是否下载所有对象到本地? (y/n): ").strip().lower()
-        if download_objects == "y":
-            local_dir = input("请输入本地下载目录 (默认: downloads): ").strip()
-            if not local_dir:
-                local_dir = "downloads"
+        if (
+            get_user_input("\nDownload all objects locally? (y/n): ", "n").lower()
+            == "y"
+        ):
+            local_dir = get_user_input(
+                "Enter local directory (default: downloads): ", "downloads"
+            )
             downloader.download_objects(objects, local_dir, prefix)
 
         total_time = time.time() - start_time
-        print(f"\n操作完成！总耗时 {total_time:.2f} 秒")
+        logger.info("\nOperation complete! Total time: %.2f seconds", total_time)
 
-    except (OSError, IOError, ValueError, KeyError) as e:
-        print(f"发生错误: {e}")
+    except (OSError, ValueError, KeyError):
+        logger.exception("An error occurred")
         sys.exit(1)
 
 

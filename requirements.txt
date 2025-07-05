@@ -2,4 +2,6 @@ cos-python-sdk-v5==1.9.25
 tencentcloud-sdk-python==3.0.1035
 tqdm>=4.64.0
 pytest>=7.0.0
-ruff>=0.1.0 
+ruff>=0.1.0
+SpeechRecognition
+pydub

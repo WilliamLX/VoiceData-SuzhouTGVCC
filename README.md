@@ -6,6 +6,7 @@
 
 - 🔍 **对象列表获取**: 支持前缀筛选、分页获取COS对象列表
 - ⬇️ **批量下载**: 多线程并发下载，支持断点续传
+- 🔄 **音频转换**: 支持将AAC等格式音频文件批量转换为WAV格式
 - 📊 **进度显示**: 实时显示下载进度和统计信息
 - 🔒 **配置管理**: 支持JSON配置文件，保护敏感信息
 - 📝 **详细日志**: 完整的操作日志记录
@@ -84,10 +85,17 @@ python cos_enhanced_downloader.py \
     --output-dir voice_data
 ```
 
+#### 音频文件转换
+```bash
+# 将 'downloads' 目录下的所有 aac 文件转换为 wav 格式，并存放到 'converted_audio' 目录
+python run_audio_processing.py downloads converted_audio
+```
+
 ## 工具说明
 
 ### cos_with_config.py
 配置文件版本的COS对象获取工具，支持从JSON配置文件读取配置信息。
+```
 
 **特性：**
 - 支持配置文件管理
@@ -228,6 +236,7 @@ python cos_enhanced_downloader.py --verbose
 - [x] 断点续传
 - [x] 进度显示
 - [x] 日志记录
+- [x] 音频格式转换
 - [ ] 增量同步
 - [ ] 安全性增强
 - [ ] 对象操作扩展
