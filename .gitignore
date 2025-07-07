@@ -24,3 +24,4 @@ config.json
 
 # Others
 .DS_Store
+*/.DS_Store
